@@ -12,6 +12,10 @@ const notion = new Client({ auth: process.env.NOTION_TOKEN })
 app.use(cors())
 app.use(express.json())
 
+app.get('/', (req, res) => {
+  res.json({ status: 'PRD Generator API is running' })
+})
+
 const PRD_SYSTEM_PROMPT = `You are an expert Product Manager who writes world-class Product Requirements Documents (PRDs).
 
 When given a rough idea, bullet points, or voice note transcript, you produce a structured PRD with these exact sections:
