@@ -2,6 +2,21 @@ import { useState } from 'react'
 import './App.css'
 import ReactMarkdown from 'react-markdown'
 
+const exampleIdeas = [
+  {
+    label: 'AI note-taking app',
+    text: 'An AI-powered note-taking app that automatically organizes notes by topic, extracts action items, and surfaces relevant past notes when you start a new meeting.'
+  },
+  {
+    label: 'Smart calendar',
+    text: 'A calendar that detects scheduling conflicts, suggests reschedule times based on everyone\'s availability, and sends Slack messages when a meeting moves.'
+  },
+  {
+    label: 'Freelancer marketplace',
+    text: 'A marketplace connecting freelance designers and developers with early-stage startups. Features portfolio showcases, milestone-based payments, and a matching algorithm.'
+  }
+]
+
 function App() {
   const [idea, setIdea] = useState('')
   const [prd, setPrd] = useState('')
@@ -11,7 +26,6 @@ function App() {
   const [notionUrl, setNotionUrl] = useState('')
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
-
 
   async function generatePRD() {
     if (!idea.trim()) return
@@ -30,7 +44,6 @@ function App() {
       const data = await response.json()
 
       if (!response.ok) {
-        // Server responded with an error status (400, 429, 500 etc)
         setError(data.error || 'Something went wrong. Please try again.')
         return
       }
@@ -38,12 +51,11 @@ function App() {
       setPrd(data.prd)
       setTitle(data.title)
     } catch (err) {
-      // This catches network failures - server not running, no internet, etc
       setError('Could not reach the server. Please check your connection and try again.')
     } finally {
       setLoading(false)
     }
-}
+  }
 
   async function exportToNotion() {
     setExporting(true)
@@ -53,7 +65,7 @@ function App() {
       const response = await fetch(`${import.meta.env.VITE_API_URL}/export-notion`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           prd,
           title: title || 'Generated PRD'
         })
@@ -72,74 +84,153 @@ function App() {
     } finally {
       setExporting(false)
     }
-}
-
-async function copyToClipboard() {
-  try {
-    await navigator.clipboard.writeText(prd)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  } catch (err) {
-    setError('Could not copy to clipboard.')
   }
-}
+
+  function fillExample(text) {
+    setIdea(text)
+    setError('')
+  }
+
+  async function copyToClipboard() {
+    try {
+      await navigator.clipboard.writeText(prd)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      setError('Could not copy to clipboard.')
+    }
+  }
 
   return (
-    <div className="container">
-      <h1>PRD Generator</h1>
-      <p className="subtitle">Turn a messy idea into a full PRD in seconds</p>
+    <div className="app-layout">
 
-      <textarea
-        placeholder="Paste your rough idea here... bullet points, voice note transcript, anything."
-        value={idea}
-        onChange={(e) => setIdea(e.target.value)}
-      />
+      {/* ── Left Panel ── */}
+      <div className="left-panel">
 
-      <button onClick={generatePRD} disabled={loading || !idea.trim()}>
-        {loading ? 'Generating...' : 'Generate PRD →'}
-      </button>
-
-      {/* {loading && <p className="loading">⏳ AI is writing your PRD...</p>} */}
-      {loading && (
-        <div className="loading">
-          <span className="spinner"></span>
-          AI is writing your PRD...
+        <div className="wordmark">
+          <span className="wordmark-dot"></span>
+          <span className="wordmark-text">PRD Generator</span>
         </div>
-      )}
+        <p className="tagline">Turn rough ideas into structured specs</p>
 
-      {error && <p className="error-message">⚠️ {error}</p>}
+        <hr className="panel-divider" />
 
+        <p className="input-label">Your idea</p>
 
-
-      {prd && (
-        <div>
-          {/* <h2 className="prd-title">{title}</h2> */}
-          <div className="export-buttons">
-            <button onClick={copyToClipboard} className="copy-btn">
-              {copied ? '✓ Copied!' : '📋 Copy Text'}
-            </button>
-
-            <button 
-              onClick={exportToNotion} 
-              disabled={exporting}
-              className="notion-btn"
-            >
-              {exporting ? 'Exporting...' : '📤 Export to Notion'}
-            </button>
-
-            {notionUrl && (
-              <a href={notionUrl} target="_blank" rel="noreferrer" className="notion-link">
-                ✅ Open in Notion →
-              </a>
-            )}
-          </div>
-
-          <div className="prd-output">
-            <h2 className="prd-title">{title}</h2>
-            <ReactMarkdown>{prd}</ReactMarkdown>
-          </div>
+        <div className="textarea-wrapper">
+          <textarea
+            placeholder="Paste your rough idea here — bullet points, voice note transcript, anything."
+            value={idea}
+            onChange={(e) => setIdea(e.target.value)}
+            maxLength={5000}
+          />
+          <p className={`char-count${idea.length > 4500 ? ' near-limit' : ''}`}>
+            {idea.length} / 5000
+          </p>
         </div>
-      )}
+
+        <button
+          className="generate-btn"
+          onClick={generatePRD}
+          disabled={loading || !idea.trim()}
+        >
+          {loading ? (
+            <>
+              <span className="spinner"></span>
+              Generating…
+            </>
+          ) : (
+            'Generate PRD'
+          )}
+        </button>
+
+        {error && <p className="error-message">{error}</p>}
+
+      </div>
+
+      {/* ── Right Panel ── */}
+      <div className="right-panel">
+
+        {!prd ? (
+          <div className="empty-state">
+            <div className="empty-state-inner">
+
+              <div>
+                <p className="how-label">How it works</p>
+                <div className="steps">
+                  <div className="step">
+                    <span className="step-num">1</span>
+                    <div>
+                      <p className="step-title">Describe your idea</p>
+                      <p className="step-desc">Rough notes, bullet points, or a voice transcript — anything works</p>
+                    </div>
+                  </div>
+                  <div className="step">
+                    <span className="step-num">2</span>
+                    <div>
+                      <p className="step-title">Generate your PRD</p>
+                      <p className="step-desc">AI structures it into a 9-section product requirements document</p>
+                    </div>
+                  </div>
+                  <div className="step">
+                    <span className="step-num">3</span>
+                    <div>
+                      <p className="step-title">Export to Notion</p>
+                      <p className="step-desc">Push the formatted PRD to your workspace in one click</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <p className="examples-label">Or try an example</p>
+                <div className="example-chips">
+                  {exampleIdeas.map((ex, i) => (
+                    <button key={i} className="example-chip" onClick={() => fillExample(ex.text)}>
+                      {ex.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+            </div>
+          </div>
+        ) : (
+          <div className="prd-panel-content">
+            <div className="prd-output">
+
+              <div className="card-actions">
+                <button
+                  onClick={copyToClipboard}
+                  className={`copy-btn${copied ? ' copied' : ''}`}
+                >
+                  {copied ? 'Copied' : 'Copy'}
+                </button>
+
+                {!notionUrl ? (
+                  <button
+                    onClick={exportToNotion}
+                    disabled={exporting}
+                    className="notion-btn"
+                  >
+                    {exporting ? 'Exporting…' : 'Export to Notion'}
+                  </button>
+                ) : (
+                  <a href={notionUrl} target="_blank" rel="noreferrer" className="notion-link">
+                    Open in Notion
+                  </a>
+                )}
+              </div>
+
+              <h2 className="prd-title">{title}</h2>
+              <ReactMarkdown>{prd}</ReactMarkdown>
+
+            </div>
+          </div>
+        )}
+
+      </div>
+
     </div>
   )
 }
