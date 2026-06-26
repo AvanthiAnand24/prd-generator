@@ -1,19 +1,89 @@
 import express from 'express'
 import cors from 'cors'
+import multer from 'multer'
 import Groq from 'groq-sdk'
 import { Client } from '@notionhq/client'
 import * as dotenv from 'dotenv'
+import mammoth from 'mammoth'
+import path from 'path'
+import { createRequire } from 'module'
+const require = createRequire(import.meta.url)
+const pdfParse = require('pdf-parse')
 dotenv.config()
 
 const app = express()
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
 const notion = new Client({ auth: process.env.NOTION_TOKEN })
 
+const AUDIO_EXTS = new Set(['.mp3', '.wav', '.m4a', '.ogg', '.flac', '.webm'])
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25 MB — Groq Whisper's max
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase()
+    const allowed = new Set(['.txt', '.pdf', '.docx', ...AUDIO_EXTS])
+    allowed.has(ext)
+      ? cb(null, true)
+      : cb(new Error('Unsupported file type. Please upload .txt, .pdf, .docx, or an audio file.'))
+  },
+})
+
 app.use(cors())
 app.use(express.json())
 
 app.get('/', (req, res) => {
   res.json({ status: 'PRD Generator API is running' })
+})
+
+app.post('/extract', upload.single('file'), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No file received.' })
+  }
+
+  const { buffer, originalname, mimetype } = req.file
+  const ext = path.extname(originalname).toLowerCase()
+
+  try {
+    let text = ''
+
+    if (AUDIO_EXTS.has(ext) || mimetype.startsWith('audio/') || mimetype.startsWith('video/')) {
+      const file = new File([buffer], originalname, { type: mimetype })
+      const result = await groq.audio.transcriptions.create({
+        file,
+        model: 'whisper-large-v3-turbo',
+        response_format: 'text',
+      })
+      text = result
+
+    } else if (ext === '.pdf') {
+      const data = await pdfParse(buffer)
+      text = data.text
+
+    } else if (ext === '.docx') {
+      const result = await mammoth.extractRawText({ buffer })
+      text = result.value
+
+    } else {
+      text = buffer.toString('utf-8')
+    }
+
+    text = text.trim()
+    if (!text) {
+      return res.status(400).json({ error: 'Could not extract any text from this file.' })
+    }
+
+    res.json({ text })
+
+  } catch (err) {
+    console.error('Extract error:', err.message)
+
+    if (err.status === 429) {
+      return res.status(429).json({ error: 'Rate limit reached. Please wait a moment and try again.' })
+    }
+
+    res.status(500).json({ error: 'Failed to process the file. Please try again.' })
+  }
 })
 
 const PRD_SYSTEM_PROMPT = `You are an expert Product Manager who writes world-class Product Requirements Documents (PRDs).

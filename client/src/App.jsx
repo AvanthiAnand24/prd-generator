@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import './App.css'
 import ReactMarkdown from 'react-markdown'
 
@@ -26,6 +26,46 @@ function App() {
   const [notionUrl, setNotionUrl] = useState('')
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [uploadedFile, setUploadedFile] = useState(null)
+  const fileInputRef = useRef(null)
+
+  async function handleFileUpload(e) {
+    const file = e.target.files[0]
+    if (!file) return
+
+    setUploading(true)
+    setError('')
+
+    const formData = new FormData()
+    formData.append('file', file)
+
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/extract`, {
+        method: 'POST',
+        body: formData,
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        setError(data.error || 'Failed to process the file.')
+        return
+      }
+      setIdea(data.text)
+      setUploadedFile(file.name)
+      setPrd('')
+      setNotionUrl('')
+    } catch (err) {
+      setError('Could not reach the server. Please check your connection.')
+    } finally {
+      setUploading(false)
+      e.target.value = ''
+    }
+  }
+
+  function removeUploadedFile() {
+    setUploadedFile(null)
+    setIdea('')
+  }
 
   async function generatePRD() {
     if (!idea.trim()) return
@@ -115,13 +155,34 @@ function App() {
 
         <hr className="panel-divider" />
 
-        <p className="input-label">Your idea</p>
+        <div className="input-label-row">
+          <p className="input-label">Your idea</p>
+          {uploading ? (
+            <span className="upload-status"><span className="spinner upload-spinner"></span>Extracting…</span>
+          ) : uploadedFile ? (
+            <span className="file-badge">
+              <span className="file-badge-name">{uploadedFile}</span>
+              <button className="file-remove" onClick={removeUploadedFile}>×</button>
+            </span>
+          ) : (
+            <button className="upload-trigger" onClick={() => fileInputRef.current?.click()}>
+              Upload file
+            </button>
+          )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".txt,.pdf,.docx,.mp3,.wav,.m4a,.ogg,.flac,.webm"
+            onChange={handleFileUpload}
+            style={{ display: 'none' }}
+          />
+        </div>
 
         <div className="textarea-wrapper">
           <textarea
             placeholder="Paste your rough idea here — bullet points, voice note transcript, anything."
             value={idea}
-            onChange={(e) => setIdea(e.target.value)}
+            onChange={(e) => { setIdea(e.target.value); if (uploadedFile) setUploadedFile(null) }}
             maxLength={5000}
           />
           <p className={`char-count${idea.length > 4500 ? ' near-limit' : ''}`}>
