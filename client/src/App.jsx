@@ -28,7 +28,10 @@ function App() {
   const [copied, setCopied] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadedFile, setUploadedFile] = useState(null)
+  const [isRecording, setIsRecording] = useState(false)
   const fileInputRef = useRef(null)
+  const recognitionRef = useRef(null)
+  const transcriptRef = useRef('')
 
   async function handleFileUpload(e) {
     const file = e.target.files[0]
@@ -65,6 +68,56 @@ function App() {
   function removeUploadedFile() {
     setUploadedFile(null)
     setIdea('')
+  }
+
+  function toggleRecording() {
+    if (isRecording) {
+      recognitionRef.current?.stop()
+      return
+    }
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (!SpeechRecognition) {
+      setError('Speech recognition is not supported in this browser. Please use Chrome or Edge.')
+      return
+    }
+
+    const recognition = new SpeechRecognition()
+    recognition.continuous = true
+    recognition.interimResults = true
+    recognition.lang = 'en-US'
+    recognitionRef.current = recognition
+    transcriptRef.current = ''
+
+    recognition.onresult = (event) => {
+      let final = ''
+      let interim = ''
+      for (let i = 0; i < event.results.length; i++) {
+        const text = event.results[i][0].transcript
+        event.results[i].isFinal ? (final += text + ' ') : (interim += text)
+      }
+      transcriptRef.current = final
+      setIdea((final + interim).trim())
+      setUploadedFile(null)
+    }
+
+    recognition.onerror = (event) => {
+      if (event.error !== 'aborted') {
+        setError(`Microphone error: ${event.error}. Please allow microphone access and try again.`)
+      }
+      setIsRecording(false)
+    }
+
+    recognition.onend = () => {
+      setIsRecording(false)
+      if (transcriptRef.current.trim()) {
+        setIdea(transcriptRef.current.trim())
+      }
+    }
+
+    recognition.start()
+    setIsRecording(true)
+    setError('')
   }
 
   async function generatePRD() {
@@ -157,18 +210,26 @@ function App() {
 
         <div className="input-label-row">
           <p className="input-label">Your idea</p>
+
           {uploading ? (
             <span className="upload-status"><span className="spinner upload-spinner"></span>Extracting…</span>
+          ) : isRecording ? (
+            <button className="recording-stop" onClick={toggleRecording}>
+              <span className="recording-dot"></span>Stop
+            </button>
           ) : uploadedFile ? (
             <span className="file-badge">
               <span className="file-badge-name">{uploadedFile}</span>
               <button className="file-remove" onClick={removeUploadedFile}>×</button>
             </span>
           ) : (
-            <button className="upload-trigger" onClick={() => fileInputRef.current?.click()}>
-              Upload file
-            </button>
+            <div className="input-label-actions">
+              <button className="mic-trigger" onClick={toggleRecording}>Voice</button>
+              <span className="input-action-divider"></span>
+              <button className="upload-trigger" onClick={() => fileInputRef.current?.click()}>Upload file</button>
+            </div>
           )}
+
           <input
             ref={fileInputRef}
             type="file"
